@@ -1,3 +1,4 @@
+
 import java.util.*;
 
 class BPlusNode {
@@ -6,104 +7,228 @@ class BPlusNode {
     ArrayList<BPlusNode> children = new ArrayList<>();
     BPlusNode next;
 
-    BPlusNode(boolean leaf) { this.leaf = leaf; }
+    BPlusNode(boolean leaf) {
+        this.leaf = leaf;
+    }
 }
 
 class BPlusTree {
-    private BPlusNode root = new BPlusNode(true);
-    private final int order; // maximum number of children in an internal node
+    BPlusNode root = new BPlusNode(true);
+    int order;
 
-    BPlusTree(int order) { this.order = order; }
+    BPlusTree(int order) {
+        this.order = order;
+    }
 
-    private static class Split {
-        int separator;
+    class Split {
+        int key;
         BPlusNode right;
-        Split(int separator, BPlusNode right) {
-            this.separator = separator;
+
+        Split(int key, BPlusNode right) {
+            this.key = key;
             this.right = right;
         }
     }
 
-    void insert(int key) {
-        Split split = insertRecursive(root, key);
-        if (split != null) {
-            BPlusNode newRoot = new BPlusNode(false);
-            newRoot.keys.add(split.separator);
-            newRoot.children.add(root);
-            newRoot.children.add(split.right);
-            root = newRoot;
+    boolean search(int x) {
+        BPlusNode p = root;
+
+        while (!p.leaf) {
+            int i = 0;
+
+            while (i < p.keys.size() && x >= p.keys.get(i))
+                i++;
+
+            p = p.children.get(i);
         }
+
+        return Collections.binarySearch(p.keys, x) >= 0;
     }
 
-    private Split insertRecursive(BPlusNode node, int key) {
-        if (node.leaf) {
-            int pos = Collections.binarySearch(node.keys, key);
-            if (pos >= 0) return null; // ignore duplicate keys
-            node.keys.add(-pos - 1, key);
+    void insert(int x) {
+        if (search(x)) {
+            System.out.println("Key already exists");
+            return;
+        }
 
-            if (node.keys.size() < order) return null;
+        Split s = insertRecursive(root, x);
 
-            int mid = node.keys.size() / 2;
+        if (s != null) {
+            BPlusNode newRoot = new BPlusNode(false);
+
+            newRoot.keys.add(s.key);
+            newRoot.children.add(root);
+            newRoot.children.add(s.right);
+
+            root = newRoot;
+        }
+
+        System.out.println("Inserted");
+    }
+
+    Split insertRecursive(BPlusNode p, int x) {
+
+        if (p.leaf) {
+            int pos = Collections.binarySearch(p.keys, x);
+            p.keys.add(-pos - 1, x);
+
+            if (p.keys.size() < order)
+                return null;
+
+            int mid = p.keys.size() / 2;
+
             BPlusNode right = new BPlusNode(true);
-            right.keys.addAll(node.keys.subList(mid, node.keys.size()));
-            node.keys.subList(mid, node.keys.size()).clear();
-            right.next = node.next;
-            node.next = right;
+
+            right.keys.addAll(p.keys.subList(mid, p.keys.size()));
+            p.keys.subList(mid, p.keys.size()).clear();
+
+            right.next = p.next;
+            p.next = right;
+
             return new Split(right.keys.get(0), right);
         }
 
-        int index = 0;
-        while (index < node.keys.size() && key >= node.keys.get(index)) index++;
-        Split childSplit = insertRecursive(node.children.get(index), key);
-        if (childSplit == null) return null;
+        int i = 0;
 
-        node.keys.add(index, childSplit.separator);
-        node.children.add(index + 1, childSplit.right);
+        while (i < p.keys.size() && x >= p.keys.get(i))
+            i++;
 
-        if (node.children.size() <= order) return null;
+        Split s = insertRecursive(p.children.get(i), x);
 
-        int mid = node.keys.size() / 2;
-        int promoted = node.keys.get(mid);
+        if (s == null)
+            return null;
+
+        p.keys.add(i, s.key);
+        p.children.add(i + 1, s.right);
+
+        if (p.children.size() <= order)
+            return null;
+
+        int mid = p.keys.size() / 2;
+        int promoted = p.keys.get(mid);
+
         BPlusNode right = new BPlusNode(false);
 
-        right.keys.addAll(node.keys.subList(mid + 1, node.keys.size()));
-        right.children.addAll(node.children.subList(mid + 1, node.children.size()));
+        right.keys.addAll(p.keys.subList(mid + 1, p.keys.size()));
+        right.children.addAll(
+            p.children.subList(mid + 1, p.children.size())
+        );
 
-        node.keys.subList(mid, node.keys.size()).clear();
-        node.children.subList(mid + 1, node.children.size()).clear();
+        p.keys.subList(mid, p.keys.size()).clear();
+        p.children.subList(mid + 1, p.children.size()).clear();
+
         return new Split(promoted, right);
     }
 
-    void displayLeaves() {
-        BPlusNode current = root;
-        while (!current.leaf) current = current.children.get(0);
+    BPlusNode leftmostLeaf() {
+        BPlusNode p = root;
 
-        System.out.print("Leaf level (linked order): ");
-        while (current != null) {
-            System.out.print(current.keys + " ");
-            current = current.next;
+        while (!p.leaf)
+            p = p.children.get(0);
+
+        return p;
+    }
+
+    void delete(int x) {
+        if (!search(x)) {
+            System.out.println("Key not found");
+            return;
         }
-        System.out.println();
+
+        ArrayList<Integer> allKeys = new ArrayList<>();
+
+        BPlusNode p = leftmostLeaf();
+
+        while (p != null) {
+            allKeys.addAll(p.keys);
+            p = p.next;
+        }
+
+        allKeys.remove(Integer.valueOf(x));
+
+        root = new BPlusNode(true);
+
+        for (int value : allKeys) {
+            Split s = insertRecursive(root, value);
+
+            if (s != null) {
+                BPlusNode newRoot = new BPlusNode(false);
+
+                newRoot.keys.add(s.key);
+                newRoot.children.add(root);
+                newRoot.children.add(s.right);
+
+                root = newRoot;
+            }
+        }
+
+        System.out.println("Deleted");
+    }
+
+    void display() {
+        ArrayList<Integer> allKeys = new ArrayList<>();
+
+        BPlusNode p = leftmostLeaf();
+
+        while (p != null) {
+            allKeys.addAll(p.keys);
+            p = p.next;
+        }
+
+        System.out.println(allKeys);
     }
 }
 
 public class Main {
     public static void main(String[] args) {
+
         Scanner sc = new Scanner(System.in);
-        System.out.print("Enter order (maximum children, >= 3): ");
+
+        System.out.print("Enter order of B+ Tree (>= 3): ");
         int order = sc.nextInt();
+
         if (order < 3) {
-            System.out.println("Order must be at least 3.");
+            System.out.println("Invalid order");
             return;
         }
 
         BPlusTree tree = new BPlusTree(order);
-        System.out.print("How many keys? ");
-        int n = sc.nextInt();
-        System.out.println("Enter keys:");
-        for (int i = 0; i < n; i++) tree.insert(sc.nextInt());
 
-        tree.displayLeaves();
-        System.out.println("All actual data keys are stored in linked leaf nodes.");
+        while (true) {
+            System.out.println("\n1.Insert  2.Search  3.Delete  4.Display  5.Exit");
+
+            int choice = sc.nextInt();
+
+            switch (choice) {
+                case 1:
+                    System.out.print("Enter key: ");
+                    tree.insert(sc.nextInt());
+                    break;
+
+                case 2:
+                    System.out.print("Enter key: ");
+                    System.out.println(
+                        tree.search(sc.nextInt()) ? "Found" : "Not Found"
+                    );
+                    break;
+
+                case 3:
+                    System.out.print("Enter key: ");
+                    tree.delete(sc.nextInt());
+                    break;
+
+                case 4:
+                    tree.display();
+                    break;
+
+                case 5:
+                    System.out.println("Exiting...");
+                    sc.close();
+                    return;
+
+                default:
+                    System.out.println("Invalid choice");
+            }
+        }
     }
 }
